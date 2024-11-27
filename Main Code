@@ -13,12 +13,12 @@ import os
 nltk.download('stopwords')
 
 # Load the model and vectorizer
-model_path = #add your file path
+model_path = "./improved_trained_model.sav"
 with open(model_path, 'rb') as file:
     vectorizer, loaded_model_v2 = pickle.load(file)
 
 # Path to the dataset CSV file
-dataset_csv_path = #add your file path
+dataset_csv_path = "./Tweets.csv"
 
 # Check if the file exists and is accessible
 if not os.path.isfile(dataset_csv_path):
