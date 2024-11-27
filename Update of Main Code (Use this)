@@ -1,0 +1,141 @@
+import pickle
+import numpy as np
+import csv
+import re
+from nltk.corpus import stopwords
+from nltk.stem.porter import PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+import nltk
+import os
+from openpyxl import Workbook , load_workbook
+
+nltk.download('stopwords')
+
+# Load the model and vectorizer
+model_path = r"C:\Users\junay\AI CW\improved_trained_model.sav"
+with open(model_path, 'rb') as file:
+    vectorizer, loaded_model_v2 = pickle.load(file)
+
+# Path to the dataset CSV file
+dataset_csv_path = r"C:\Users\junay\AI CW\Tweets.csv"
+
+# Check if the file exists and is accessible
+if not os.path.isfile(dataset_csv_path):
+    raise FileNotFoundError(f"The dataset file {dataset_csv_path} does not exist.")
+
+brand_tweets_list = []
+
+try:
+    # Read the CSV file using csv module
+    with open(dataset_csv_path, mode='r', encoding='utf-8') as file:
+        csv_reader = csv.reader(file)
+        header = next(csv_reader)  # Read the header row
+        if 'text' not in header:
+            raise ValueError(
+                "Error: 'text' column not found in the CSV file. Please ensure your CSV has a 'text' column.")
+
+        text_index = header.index('text')
+        for row in csv_reader:
+            brand_tweets_list.append(row[text_index])
+except PermissionError:
+    raise PermissionError(
+        f"Permission denied: Unable to access the file {dataset_csv_path}. Please check the file permissions.")
+except Exception as e:
+    raise Exception(f"An error occurred while reading the CSV file: {e}")
+
+
+def analyze_brand_tweets(tweets_list):
+    # Preprocess the text data (using the same stemming function as in your original training)
+    port_stem_new = PorterStemmer()
+
+    def stemming(content):
+        stemmed_content = re.sub('[^a-zA-Z]', ' ', content)
+        stemmed_content = stemmed_content.lower()
+        stemmed_content = stemmed_content.split()
+        stemmed_content = [port_stem_new.stem(word) for word in stemmed_content if
+                           not word in stopwords.words('english')]
+        stemmed_content = ' '.join(stemmed_content)
+        return stemmed_content
+
+    stemmed_tweets = [stemming(tweet) for tweet in tweets_list]
+
+    # Vectorize the tweets using the same vectorizer used during training
+    X_brand_tweets = vectorizer.transform(stemmed_tweets)
+
+    # Predict sentiments for brand tweets
+    predictions = loaded_model_v2.predict(X_brand_tweets)
+
+    # Analyze the distribution of sentiments
+    sentiment_counts = np.bincount(predictions, minlength=3) / len(predictions) * 100
+    print(sentiment_counts)
+
+    Brand_Name = input("Enter the Brand Name: ")
+
+    print(f"Sentiment Distribution for {Brand_Name}:")
+    print(f"Positive: {sentiment_counts[1]:.2f}%")
+    print(f"Negative: {sentiment_counts[0]:.2f}%")
+    print(f"Neutral: {sentiment_counts[2]:.2f}%")
+
+    # Create a new Excel workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tweets Sentiment Analysis"
+
+    # Write the header
+    ws.append(["Tweet", "Sentiment"])
+
+    # Write the tweets and their sentiments
+    sentiment_map = {0: "Negative", 1: "Positive", 2: "Neutral"}
+    for tweet, sentiment in zip(tweets_list, predictions):
+        ws.append([tweet, sentiment_map[sentiment]])
+
+    # Save the workbook
+    output_excel_path = r"C:\Users\junay\AI CW\Tweets_Sentiment_Analysis.xlsx"
+    wb.save(output_excel_path)
+    print(f"Sentiment analysis results saved to {output_excel_path}")
+
+    return output_excel_path  # Return the path to the Excel file for further processing
+
+
+output_excel_path = analyze_brand_tweets(brand_tweets_list)
+
+# Load the saved Excel file for printing specific sentiments
+wb = load_workbook(output_excel_path)
+ws = wb.active
+
+# Read the data from the Excel sheet
+tweets_data = []
+for row in ws.iter_rows(min_row=2, values_only=True):  # Skip header row
+    tweets_data.append(row)
+
+# Separate the tweets based on their sentiment
+negative_tweets = [tweet for tweet, sentiment in tweets_data if sentiment == "Negative"]
+positive_tweets = [tweet for tweet, sentiment in tweets_data if sentiment == "Positive"]
+neutral_tweets = [tweet for tweet, sentiment in tweets_data if sentiment == "Neutral"]
+
+# Print some of the tweets based on user input
+print_some_negative_tweets = input("Do you want to print some negative tweets? (yes/no): ").lower()
+if print_some_negative_tweets == 'yes' and negative_tweets:
+    print("Some Negative Tweets:")
+    for tweet in negative_tweets[:5]:  # Print first 5 negative tweets
+        print(tweet)
+else:
+    print("Skipping printing some negative tweets.")
+
+print_some_positive_tweets = input("Do you want to print some positive tweets? (yes/no): ").lower()
+if print_some_positive_tweets == 'yes' and positive_tweets:
+    print("Some Positive Tweets:")
+    for tweet in positive_tweets[:5]:  # Print first 5 positive tweets
+        print(tweet)
+else:
+    print("Skipping printing some positive tweets.")
+
+print_some_neutral_tweets = input("Do you want to print some neutral tweets? (yes/no): ").lower()
+if print_some_neutral_tweets == 'yes' and neutral_tweets:
+    print("Some Neutral Tweets:")
+    for tweet in neutral_tweets[:5]:  # Print first 5 neutral tweets
+        print(tweet)
+else:
+    print("Skipping printing some neutral tweets.")
