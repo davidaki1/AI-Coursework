@@ -12,22 +12,22 @@ import os
 import ssl
 
 print("running")
+# try:
+#     _create_unverified_https_context = ssl._create_unverified_context
+# except AttributeError:
+#     pass
+# else:
+#     ssl._create_default_https_context = _create_unverified_https_context
 
-try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-nltk.download('stopwords')
+# nltk.download('stopwords')
 
 # Load the model and vectorizer
-model_path = # enter your own file path
+model_path = "./improved_trained_model.sav"
 with open(model_path, 'rb') as file:
     vectorizer, loaded_model_v2 = pickle.load(file)
 
 # Path to the dataset CSV file
-dataset_csv_path = #enter your own file path for the apple
+dataset_csv_path = "./Apple.csv"
 
 # Check if the file exists and is accessible
 if not os.path.isfile(dataset_csv_path):
@@ -58,7 +58,8 @@ def analyze_brand_tweets():
         stemmed_content = re.sub('[^a-zA-Z]', ' ', content)
         stemmed_content = stemmed_content.lower()
         stemmed_content = stemmed_content.split()
-        stemmed_content = [port_stem_new.stem(word) for word in stemmed_content if not word in stopwords.words('english')]
+        stemmed_content = [port_stem_new.stem(word) for word in stemmed_content if
+                           not word in stopwords.words('english')]
         stemmed_content = ' '.join(stemmed_content)
         return stemmed_content
 
@@ -70,6 +71,7 @@ def analyze_brand_tweets():
     # Predict sentiments for brand tweets
     predictions = loaded_model_v2.predict(X_brand_tweets)
     brand_tweets_df['sentiment'] = predictions
+    print(predictions)
 
     # Analyze the distribution of sentiments
     sentiment_counts = pd.Series(predictions).value_counts(normalize=True) * 100
@@ -82,31 +84,32 @@ def analyze_brand_tweets():
     print(f"Negative: {sentiment_counts.get(0, 0):.2f}%")
     print(f"Neutral: {sentiment_counts.get(2, 0):.2f}%")
 
-    # Save the results to a CSV file
-    brand_tweets_df.to_csv('sentiment_analysis_results.csv', index=False)
-
 analyze_brand_tweets()
 
 print_some_negative_tweets = input("Do you want to print some negative tweets? (yes/no): ").lower()
 if print_some_negative_tweets == 'yes':
     print("Some Negative Tweets:")
-    negative_tweets = brand_tweets_df[brand_tweets_df['sentiment'] == 0]['text']
-    print(negative_tweets.head().to_string(index=False))
+    negative_tweets = brand_tweets_df[brand_tweets_df['sentiment'] == 0].head()
+    for tweet in negative_tweets['text']:
+        print(tweet)
 else:
     print("Skipping printing some negative tweets.")
 
 print_some_positive_tweets = input("Do you want to print some positive tweets? (yes/no): ").lower()
 if print_some_positive_tweets == 'yes':
     print("Some Positive Tweets:")
-    positive_tweets = brand_tweets_df[brand_tweets_df['sentiment'] == 1]['text']
-    print(positive_tweets.head().to_string(index=False))
+    positive_tweets = brand_tweets_df[brand_tweets_df['sentiment'] == 1].head()
+    for tweet in positive_tweets['text']:
+        print(tweet)
 else:
     print("Skipping printing some positive tweets.")
 
 print_some_neutral_tweets = input("Do you want to print some neutral tweets? (yes/no): ").lower()
 if print_some_neutral_tweets == 'yes':
     print("Some Neutral Tweets:")
-    neutral_tweets = brand_tweets_df[brand_tweets_df['sentiment'] == 2]['text']
-    print(neutral_tweets.head().to_string(index=False))
+    neutral_tweets = brand_tweets_df[brand_tweets_df['sentiment'] == 2].head()
+    for tweet in neutral_tweets['text']:
+        print(tweet)
 else:
     print("Skipping printing some neutral tweets.")
+
