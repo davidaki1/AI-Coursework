@@ -11,44 +11,34 @@ import nltk
 import os
 import ssl
 
-print("running")
-# try:
-#     _create_unverified_https_context = ssl._create_unverified_context
-# except AttributeError:
-#     pass
-# else:
-#     ssl._create_default_https_context = _create_unverified_https_context
-
-# nltk.download('stopwords')
 
 # Load the model and vectorizer
-model_path = "./improved_trained_model.sav"
-with open(model_path, 'rb') as file:
-    vectorizer, loaded_model_v2 = pickle.load(file)
+# Make sure you have downloaded the Model and Vectorizer File Correctly
+with open(r'C:\Users\dakin\PycharmProjects\AICoursework\sentiment_model_and_vectorizer.sav', 'rb') as file:
+    loaded_vectorizer, loaded_model = pickle.load(file)
+
+print("Model and vectorizer loaded successfully!")
+
 
 # Path to the dataset CSV file
-dataset_csv_path = "./Tweets.csv"
+#Change this to any csv file you want! 
+dataset_csv_path = r"C:\Users\dakin\PycharmProjects\AICoursework\Tweets_Changed.csv"
 
 # Check if the file exists and is accessible
 if not os.path.isfile(dataset_csv_path):
     raise FileNotFoundError(f"The dataset file {dataset_csv_path} does not exist.")
 
-try:
-    # Read the CSV file directly
-    brand_tweets_df = pd.read_csv(dataset_csv_path)
-except PermissionError:
-    raise PermissionError(f"Permission denied: Unable to access the file {dataset_csv_path}. Please check the file permissions.")
-except Exception as e:
-    raise Exception(f"An error occurred while reading the CSV file: {e}")
 
-# Check for and drop any null values
+# Read the CSV file directly
+brand_tweets_df = pd.read_csv(dataset_csv_path)
 if brand_tweets_df.isnull().values.any():
-    brand_tweets_df = brand_tweets_df.dropna()
+  brand_tweets_df = brand_tweets_df.dropna()
+
 
 def analyze_brand_tweets():
     # Ensure 'text' column exists (adjust if column name is different)
-    if 'text' not in brand_tweets_df.columns:
-        print("Error: 'text' column not found in the CSV file. Please ensure your CSV has a 'text' column.")
+    if 'Text' not in brand_tweets_df.columns:
+        print("Error: 'Text' column not found in the CSV file. Please ensure your CSV has a 'Text' column.")
         return
 
     # Preprocess the text data (using the same stemming function as in your original training)
@@ -58,24 +48,24 @@ def analyze_brand_tweets():
         stemmed_content = re.sub('[^a-zA-Z]', ' ', content)
         stemmed_content = stemmed_content.lower()
         stemmed_content = stemmed_content.split()
-        stemmed_content = [port_stem_new.stem(word) for word in stemmed_content if
-                           not word in stopwords.words('english')]
+        stemmed_content = [port_stem_new.stem(word) for word in stemmed_content if not word in stopwords.words('english')]
         stemmed_content = ' '.join(stemmed_content)
         return stemmed_content
 
-    brand_tweets_df['stemmed_content'] = brand_tweets_df['text'].apply(stemming)
+    brand_tweets_df['stemmed_content'] = brand_tweets_df['Text'].apply(stemming)
 
-    # Vectorize the tweets using the same vectorizer used during training
-    X_brand_tweets = vectorizer.transform(brand_tweets_df['stemmed_content'].values)
+    # Vectorize the tweets using the same vectorizer used during training (You'll need to load or recreate this vectorizer)
+    X_brand_tweets = loaded_vectorizer.transform(brand_tweets_df['stemmed_content'].values)
 
     # Predict sentiments for brand tweets
-    predictions = loaded_model_v2.predict(X_brand_tweets)
-    brand_tweets_df['sentiment'] = predictions
-    print(predictions)
+    predictions = loaded_model.predict(X_brand_tweets)
 
-    # Analyze the distribution of sentiments
+    brand_tweets_df['Predicted_Sentiment'] = predictions
+
     sentiment_counts = pd.Series(predictions).value_counts(normalize=True) * 100
-    print(sentiment_counts)
+
+    sentiment_map = {0: "Negative", 1: "Positive", 2: "Neutral"}
+    brand_tweets_df['Sentiment_Label'] = brand_tweets_df['Predicted_Sentiment'].map(sentiment_map)
 
     Brand_Name = input("Enter the Brand Name: ")
 
@@ -84,25 +74,28 @@ def analyze_brand_tweets():
     print(f"Negative: {sentiment_counts.get(0, 0):.2f}%")
     print(f"Neutral: {sentiment_counts.get(2, 0):.2f}%")
 
+    total_brand_score = (sentiment_counts.get(1, 0) / sentiment_counts.get(0, 0) + sentiment_counts.get(1, 0))
+    print(f"Brand Score for {Brand_Name}: {total_brand_score:.2f}%")
+
+    print_some_negative_tweets = input("\nDo you want to print some negative tweets? (yes/no): ").lower()
+    if print_some_negative_tweets == 'yes':
+        print("\nSome Negative Tweets:")
+        print(brand_tweets_df.loc[brand_tweets_df['Predicted_Sentiment'] == 0, 'Text'].head(5).to_list())
+    else:
+        print("Skipping printing some negative tweets.")
+
+    print_some_positive_tweets = input("\nDo you want to print some positive tweets? (yes/no): ").lower()
+    if print_some_positive_tweets == 'yes':
+        print("\nSome Positive Tweets:")
+        print(brand_tweets_df.loc[brand_tweets_df['Predicted_Sentiment'] == 1, 'Text'].head(5).to_list())
+    else:
+        print("Skipping printing some positive tweets.")
+
+    print_some_neutral_tweets = input("\nDo you want to print some neutral tweets? (yes/no): ").lower()
+    if print_some_neutral_tweets == 'yes':
+        print("\nSome Neutral Tweets:")
+        print(brand_tweets_df.loc[brand_tweets_df['Predicted_Sentiment'] == 2, 'Text'].head(5).to_list())
+    else:
+        print("Skipping printing some neutral tweets.")
+
 analyze_brand_tweets()
-
-print_some_negative_tweets = input("Do you want to print some negative tweets? (yes/no): ").lower()
-if print_some_negative_tweets == 'yes':
-    print("Some Negative Tweets:")
-    print(brand_tweets_df[brand_tweets_df['sentiment'] == 0].head())
-else:
-    print("Skipping printing some negative tweets.")
-
-print_some_positive_tweets = input("Do you want to print some positive tweets? (yes/no): ").lower()
-if print_some_positive_tweets == 'yes':
-    print("Some Positive Tweets:")
-    print(brand_tweets_df[brand_tweets_df['sentiment'] == 1].head())
-else:
-    print("Skipping printing some positive tweets.")
-
-print_some_neutral_tweets = input("Do you want to print some neutral tweets? (yes/no): ").lower()
-if print_some_neutral_tweets == 'yes':
-    print("Some Neutral Tweets:")
-    print(brand_tweets_df[brand_tweets_df['sentiment'] == 2].head())
-else:
-    print("Skipping printing some neutral tweets.")
