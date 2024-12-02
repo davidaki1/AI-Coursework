@@ -1,0 +1,155 @@
+import pickle
+import numpy as np
+import pandas as pd
+import re
+from nltk.corpus import stopwords
+from nltk.stem.porter import PorterStemmer
+from nltk.stem.snowball import SnowballStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+import nltk
+import os
+from langdetect import detect
+from googletrans import Translator
+
+# Load NLTK data
+nltk.download('stopwords')
+
+# Load the model and vectorizer
+with open(r'.\sentiment_model_and_vectorizer.sav', 'rb') as file:
+    loaded_vectorizer, loaded_model = pickle.load(file)
+
+print("Model and vectorizer loaded successfully!")
+
+dataset_csv_path = r".\french_tweets_sample.csv"
+
+# Check if the file exists and is accessible
+if not os.path.isfile(dataset_csv_path):
+    raise FileNotFoundError(f"The dataset file {dataset_csv_path} does not exist.")
+
+# Read the CSV file directly
+brand_tweets_df = pd.read_csv(dataset_csv_path)
+if brand_tweets_df.isnull().values.any():
+    brand_tweets_df = brand_tweets_df.dropna()
+
+
+def clean_text_for_translation(text):
+    text = re.sub(r'http\S+', '', text)  # Remove URLs
+    text = re.sub(r'#\S+', '', text)  # Remove hashtags
+    text = re.sub(r'[^a-zA-ZÀ-ÿ\s]', '', text)  # Remove non-alphanumeric characters except accents
+    text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+    return text
+
+
+def analyze_brand_tweets():
+    # Ensure 'text' column exists
+    if 'text' not in brand_tweets_df.columns:
+        print("Error: 'text' column not found in the CSV file. Please ensure your CSV has a 'text' column.")
+        return
+
+    # Preprocess the text data
+    port_stem_new = PorterStemmer()
+    french_stemmer = SnowballStemmer("french")
+    translator = Translator()
+
+    def stemming(content):
+        try:
+            lang = detect(content)
+        except Exception:
+            lang = "unknown"
+
+        stemmed_content = re.sub('[^a-zA-Z]', ' ', content)
+        stemmed_content = stemmed_content.lower()
+        stemmed_content = stemmed_content.split()
+
+        if lang == 'en':
+            stemmed_content = [port_stem_new.stem(word) for word in stemmed_content if word not in stopwords.words('english')]
+        elif lang == 'fr':
+            stemmed_content = [french_stemmer.stem(word) for word in stemmed_content if word not in stopwords.words('french')]
+        else:
+            stemmed_content = []
+
+        return ' '.join(stemmed_content)
+
+    brand_tweets_df['stemmed_content'] = brand_tweets_df['text'].apply(stemming)
+
+    # Vectorize the tweets
+    X_brand_tweets = loaded_vectorizer.transform(brand_tweets_df['stemmed_content'].values)
+
+    # Predict sentiments
+    predictions = loaded_model.predict(X_brand_tweets)
+
+    brand_tweets_df['Predicted_Sentiment'] = predictions
+
+    sentiment_counts = pd.Series(predictions).value_counts(normalize=True) * 100
+
+    sentiment_map = {0: "Negative", 1: "Positive", 2: "Neutral"}
+    brand_tweets_df['Sentiment_Label'] = brand_tweets_df['Predicted_Sentiment'].map(sentiment_map)
+
+    Brand_Name = input("Enter the Brand Name: ")
+
+    print(f"Sentiment Distribution for {Brand_Name}:")
+    print(f"Positive: {sentiment_counts.get(1, 0):.2f}%")
+    print(f"Negative: {sentiment_counts.get(0, 0):.2f}%")
+    print(f"Neutral: {sentiment_counts.get(2, 0):.2f}%")
+
+    # Calculate Brand Score safely
+    try:
+        if sentiment_counts.get(0, 0) > 0:
+            total_brand_score = 100 - (sentiment_counts.get(1, 0) / sentiment_counts.get(0, 0) + sentiment_counts.get(1, 0))
+        else:
+            total_brand_score = 100
+    except ZeroDivisionError:
+        total_brand_score = 100
+
+    print(f"Brand Score for {Brand_Name}: {total_brand_score:.2f}%")
+
+    def print_tweets(sentiment, label):
+        tweets = brand_tweets_df.loc[brand_tweets_df['Predicted_Sentiment'] == sentiment, 'text'].head(5).to_list()
+        if tweets:
+            for tweet in tweets:
+                try:
+                    detected_lang = detect(tweet)
+                    cleaned_tweet = clean_text_for_translation(tweet)
+                    if detected_lang == 'fr':
+                        # Retry mechanism for translation
+                        retry_count = 3
+                        translation = None
+                        while retry_count > 0:
+                            try:
+                                translation = translator.translate(cleaned_tweet, src='fr', dest='en')
+                                break
+                            except Exception:
+                                retry_count -= 1
+
+                        if translation and translation.text:
+                            print(f"\nOriginal French Tweet: {tweet}")
+                            print(f"Translated to English: {translation.text}")
+                        else:
+                            print(f"\nOriginal French Tweet: {tweet}")
+                            print("Translated to English: [Translation failed]")
+                    else:
+                        print(f"\nTweet: {tweet}")
+                except Exception as e:
+                    print(f"\nTweet (translation failed): {tweet}\nError: {e}")
+        else:
+            print(f"\nNo {label} tweets found.")
+
+    print_some_negative_tweets = input("\nDo you want to print some negative tweets? (yes/no): ").lower()
+    if print_some_negative_tweets == 'yes':
+        print("\nSome Negative Tweets:")
+        print_tweets(0, "Negative")
+
+    print_some_positive_tweets = input("\nDo you want to print some positive tweets? (yes/no): ").lower()
+    if print_some_positive_tweets == 'yes':
+        print("\nSome Positive Tweets:")
+        print_tweets(1, "Positive")
+
+    print_some_neutral_tweets = input("\nDo you want to print some neutral tweets? (yes/no): ").lower()
+    if print_some_neutral_tweets == 'yes':
+        print("\nSome Neutral Tweets:")
+        print_tweets(2, "Neutral")
+
+
+analyze_brand_tweets()
